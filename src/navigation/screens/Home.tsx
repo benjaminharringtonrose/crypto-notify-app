@@ -14,7 +14,7 @@ import {
   TIME_RANGES,
   TimeRangeKey,
 } from "@/services/CoinGeckoService";
-import { useGetPercentChangeQuery } from "@/store/coinGeckoApi";
+import { useGetPercentChangeQuery } from "@/store/cryptoApi";
 
 export function Home() {
   const [selected, setSelected] = useState<CoinSymbol>("BTC");
@@ -22,22 +22,16 @@ export function Home() {
   const [error, setError] = useState<string | null>(null);
 
   const {
-    data: percentChange,
+    data: percentChangeResult,
     isFetching,
     isError,
-  } = useGetPercentChangeQuery(
-    { symbol: selected, range: timeRange },
-    {
-      // Reduce unnecessary re-fetches when arguments haven't changed.
-      refetchOnMountOrArgChange: true,
-    }
-  );
+  } = useGetPercentChangeQuery({ symbol: selected, range: timeRange });
 
   if (isError && !error) {
     setError("Failed to load market data.");
   }
 
-  const change = percentChange ?? null;
+  const change = percentChangeResult?.value ?? null;
   const isPositive = typeof change === "number" && change > 0;
   const isNegative = typeof change === "number" && change < 0;
 

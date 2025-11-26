@@ -1,6 +1,7 @@
 "react-native-reanimated";
 import { DarkTheme, DefaultTheme } from "@react-navigation/native";
 import { Provider } from "react-redux";
+import { PersistGate } from "redux-persist/integration/react";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import * as React from "react";
@@ -8,7 +9,7 @@ import { useColorScheme } from "react-native";
 
 import { Colors } from "./constants/Colors";
 import { Navigation } from "./navigation";
-import { store } from "./store";
+import { store, persistor } from "./store";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -42,19 +43,21 @@ export function App() {
 
   return (
     <Provider store={store}>
-      <Navigation
-        theme={theme}
-        linking={{
-          enabled: "auto",
-          prefixes: [
-            // Change the scheme to match your app's scheme defined in app.json
-            "helloworld://",
-          ],
-        }}
-        onReady={() => {
-          SplashScreen.hideAsync();
-        }}
-      />
+      <PersistGate loading={null} persistor={persistor}>
+        <Navigation
+          theme={theme}
+          linking={{
+            enabled: "auto",
+            prefixes: [
+              // Change the scheme to match your app's scheme defined in app.json
+              "helloworld://",
+            ],
+          }}
+          onReady={() => {
+            SplashScreen.hideAsync();
+          }}
+        />
+      </PersistGate>
     </Provider>
   );
 }

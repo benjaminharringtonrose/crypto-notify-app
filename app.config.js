@@ -38,6 +38,7 @@ export default {
       MORALIS_API_KEY: process.env.MORALIS_API_KEY,
       COINBASE_API_KEY: process.env.COINBASE_API_KEY,
       COINBASE_API_SECRET: process.env.COINBASE_API_SECRET,
+      COIN_MARKET_CAP_API_KEY: process.env.COIN_MARKET_CAP_API_KEY,
     },
   },
 };

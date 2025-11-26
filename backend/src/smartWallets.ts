@@ -14,5 +14,4 @@ export const MONAD_SMART_TRADER_WALLETS: WalletAddress[] = [
   "0x3f3429d28438cc14133966820b8a9ea61cf1d4f0",
   "0xeb89055e16ae1c1e42ad6770a7344ff5c7b4f31d",
   "0x0c5a2c72c009252f0e7312f5a1ab87de02be6fbe",
-  "0x26d7b4fe67f4601643304b5023b3caf3a704",
 ];

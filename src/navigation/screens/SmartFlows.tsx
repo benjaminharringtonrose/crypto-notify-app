@@ -9,48 +9,95 @@ import {
 
 import { colors } from "@/theme/colors";
 import { TIME_RANGES, TimeRangeKey } from "@/services/CoinGeckoService";
-import { useGetMonadSmartDistributionQuery } from "@/store/smartApi";
+import {
+  useGetMonadSmartDistributionQuery,
+  WalletBalanceSummary,
+} from "@/store/smartApi";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export function SmartFlows() {
   const { top } = useSafeAreaInsets();
 
-  const [timeRange, setTimeRange] = React.useState<TimeRangeKey>("24h");
+  const [timeRange, setTimeRange] = React.useState<TimeRangeKey>("1h");
 
-  const { data, isFetching, isError } = useGetMonadSmartDistributionQuery({
-    timeRange,
-  });
+  const { data, isFetching, isError } = useGetMonadSmartDistributionQuery(
+    { timeRange },
+    {
+      refetchOnMountOrArgChange: 60 * 60,
+    }
+  );
 
   const smartMoney = data?.cohorts.smartMoney;
   const smartTraders = data?.cohorts.smartTraders;
 
-  const renderCohort = (label: string, values?: typeof smartMoney) => {
-    const inflow =
-      typeof values?.netInflowPercent === "number"
-        ? `${values.netInflowPercent.toFixed(2)}%`
-        : "--";
-    const outflow =
-      typeof values?.netOutflowPercent === "number"
-        ? `${values.netOutflowPercent.toFixed(2)}%`
-        : "--";
+  const selectedRangeLabel =
+    TIME_RANGES.find((r) => r.key === timeRange)?.label ?? "";
+
+  const renderCohort = (
+    label: string,
+    cohort?: {
+      wallets: WalletBalanceSummary[];
+      averagePercentChange: number | null;
+    }
+  ) => {
+    const wallets = cohort?.wallets ?? [];
+    const avgPct =
+      typeof cohort?.averagePercentChange === "number"
+        ? cohort.averagePercentChange
+        : null;
+
+    const avgColor =
+      typeof avgPct === "number"
+        ? avgPct >= 0
+          ? colors.success.text
+          : colors.danger.text
+        : colors.text.secondary;
 
     return (
       <View style={styles.cohortCard}>
-        <Text style={styles.cohortTitle}>{label}</Text>
-        <View style={styles.cohortRow}>
-          <View style={styles.metric}>
-            <Text style={styles.metricLabel}>Avg Inflow</Text>
-            <Text style={[styles.metricValue, { color: colors.success.text }]}>
-              {inflow}
-            </Text>
-          </View>
-          <View style={styles.metric}>
-            <Text style={styles.metricLabel}>Avg Outflow</Text>
-            <Text style={[styles.metricValue, { color: colors.danger.text }]}>
-              {outflow}
-            </Text>
-          </View>
+        <View style={styles.cohortHeaderRow}>
+          <Text style={styles.cohortTitle}>{label}</Text>
+          <Text style={[styles.cohortAvg, { color: avgColor }]}>
+            {avgPct !== null ? `${avgPct.toFixed(2)}% avg` : "--"}
+          </Text>
         </View>
+        {wallets.length === 0 ? (
+          <Text style={styles.metricLabel}>
+            No wallets found for this cohort.
+          </Text>
+        ) : (
+          wallets.map((wallet) => {
+            const pct = wallet.percentChange;
+            const pctText =
+              typeof pct === "number" ? `${pct.toFixed(2)}%` : "--";
+            const pctColor =
+              typeof pct === "number"
+                ? pct >= 0
+                  ? colors.success.text
+                  : colors.danger.text
+                : colors.text.secondary;
+
+            return (
+              <View key={wallet.address} style={styles.walletRow}>
+                <View style={styles.walletColumn}>
+                  <Text style={styles.walletAddress}>
+                    {wallet.address.slice(0, 6)}...
+                    {wallet.address.slice(-4)}
+                  </Text>
+                  <Text style={styles.walletLabel}>
+                    Current balance (end of {selectedRangeLabel})
+                  </Text>
+                </View>
+                <View style={styles.walletColumnRight}>
+                  <Text style={styles.walletBalance}>{wallet.endMon} MON</Text>
+                  <Text style={[styles.walletDelta, { color: pctColor }]}>
+                    {pctText} over {selectedRangeLabel}
+                  </Text>
+                </View>
+              </View>
+            );
+          })
+        )}
       </View>
     );
   };
@@ -64,7 +111,7 @@ export function SmartFlows() {
         <View style={styles.header}>
           <Text style={styles.title}>Monad Smart Flows</Text>
           <Text style={styles.subtitle}>
-            Average inflow and outflow for Smart Money and Smart Traders.
+            Native MON balances for Smart Money and Smart Traders.
           </Text>
         </View>
 
@@ -189,21 +236,52 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: 12,
   },
-  cohortRow: {
+  cohortHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 16,
+    alignItems: "center",
+    marginBottom: 8,
   },
-  metric: {
-    flex: 1,
+  cohortAvg: {
+    fontSize: 13,
+    fontWeight: "600",
   },
   metricLabel: {
     fontSize: 12,
     color: colors.text.secondary,
-    marginBottom: 4,
   },
-  metricValue: {
-    fontSize: 20,
-    fontWeight: "700",
+  walletRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 8,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border.light,
+  },
+  walletColumn: {
+    flex: 2,
+  },
+  walletColumnRight: {
+    flex: 1,
+    alignItems: "flex-end",
+  },
+  walletAddress: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: colors.text.primary,
+  },
+  walletLabel: {
+    fontSize: 12,
+    color: colors.text.secondary,
+  },
+  walletBalance: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.text.primary,
+  },
+  walletDelta: {
+    fontSize: 12,
+    marginTop: 2,
   },
 });

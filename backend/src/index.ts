@@ -1,23 +1,18 @@
 import cors from "cors";
 import express from "express";
+import dotenv from "dotenv";
 
 import {
   MONAD_SMART_MONEY_WALLETS,
   MONAD_SMART_TRADER_WALLETS,
 } from "./smartWallets";
 
+dotenv.config();
+
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 
 // Default to public Monad RPC; you can override with MONAD_RPC_URL in .env
 const MONAD_RPC_URL = process.env.MONAD_RPC_URL ?? "https://rpc.monad.xyz";
-
-// WMON token on Monad mainnet (wrapped MON) from Monad docs:
-// https://docs.monad.xyz/developer-essentials/network-information
-const WMON_ADDRESS = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A";
-
-// ERC-20 Transfer(address,address,uint256) topic
-const TRANSFER_TOPIC =
-  "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
 type JsonRpcRequest = {
   jsonrpc: "2.0";
@@ -32,6 +27,10 @@ type JsonRpcResponse<T> = {
   result?: T;
   error?: { code: number; message: string };
 };
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function jsonRpc<T>(body: JsonRpcRequest): Promise<T> {
   const res = await fetch(MONAD_RPC_URL, {
@@ -67,6 +66,7 @@ async function getLatestBlockNumber(): Promise<number> {
 // Rough mapping from our timeRange keys to an approximate block span.
 // Monad aims for fast blocks; we assume ~2s per block as a starting point.
 const RANGE_SECONDS: Record<string, number> = {
+  "1h": 60 * 60,
   "24h": 24 * 60 * 60,
   "2d": 2 * 24 * 60 * 60,
   "3d": 3 * 24 * 60 * 60,
@@ -79,112 +79,100 @@ const RANGE_SECONDS: Record<string, number> = {
 };
 
 const SECONDS_PER_BLOCK = 2;
-const MAX_BLOCK_SPAN = 50_000; // safety cap to avoid massive log scans
 
-type FlowTotals = {
-  inflow: bigint;
-  outflow: bigint;
+type WalletBalanceSummary = {
+  address: string;
+  startMon: string;
+  endMon: string;
+  deltaMon: string;
+  percentChange: number | null;
 };
 
-type LogEntry = {
-  topics: string[];
-  data: string;
+type CohortBalances = {
+  wallets: WalletBalanceSummary[];
+  averagePercentChange: number | null;
 };
 
-function toPaddedAddress(address: string): string {
-  return `0x${address.toLowerCase().replace(/^0x/, "").padStart(64, "0")}`;
-}
-
-async function getWalletFlows(
-  wallet: string,
-  fromBlock: number,
-  toBlock: number
-): Promise<FlowTotals> {
-  const padded = toPaddedAddress(wallet);
-
-  // Logs where wallet is the recipient (inflow)
-  const inflowLogs = await jsonRpc<LogEntry[]>({
+async function getBalanceAt(
+  address: string,
+  blockNumber: number
+): Promise<bigint> {
+  const hexBlock = `0x${blockNumber.toString(16)}`;
+  const balanceHex = await jsonRpc<string>({
     jsonrpc: "2.0",
     id: 2,
-    method: "eth_getLogs",
-    params: [
-      {
-        address: WMON_ADDRESS,
-        fromBlock: `0x${fromBlock.toString(16)}`,
-        toBlock: `0x${toBlock.toString(16)}`,
-        topics: [TRANSFER_TOPIC, null, padded],
-      },
-    ],
+    method: "eth_getBalance",
+    params: [address, hexBlock],
   });
+  return BigInt(balanceHex);
+}
 
-  // Logs where wallet is the sender (outflow)
-  const outflowLogs = await jsonRpc<LogEntry[]>({
-    jsonrpc: "2.0",
-    id: 3,
-    method: "eth_getLogs",
-    params: [
-      {
-        address: WMON_ADDRESS,
-        fromBlock: `0x${fromBlock.toString(16)}`,
-        toBlock: `0x${toBlock.toString(16)}`,
-        topics: [TRANSFER_TOPIC, padded],
-      },
-    ],
-  });
-
-  const inflow = inflowLogs.reduce((sum, log) => {
-    const amount = BigInt(log.data);
-    return sum + amount;
-  }, 0n);
-
-  const outflow = outflowLogs.reduce((sum, log) => {
-    const amount = BigInt(log.data);
-    return sum + amount;
-  }, 0n);
-
-  return { inflow, outflow };
+function formatMon(wei: bigint): string {
+  const decimals = 18n;
+  const precision = 4n;
+  const factor = 10n ** precision; // 10^4 for 4 decimal places
+  const scaled = (wei * factor) / 10n ** decimals;
+  const integer = scaled / factor;
+  const fractional = scaled % factor;
+  return `${integer.toString()}.${fractional.toString().padStart(4, "0")}`;
 }
 
 async function aggregateFlows(
   wallets: string[],
   timeRange: string
-): Promise<{ netInflowPercent: number; netOutflowPercent: number }> {
+): Promise<CohortBalances> {
   const latest = await getLatestBlockNumber();
   const seconds = RANGE_SECONDS[timeRange] ?? RANGE_SECONDS["24h"];
-  const span = Math.min(
-    Math.floor(seconds / SECONDS_PER_BLOCK),
-    MAX_BLOCK_SPAN
-  );
-  const fromBlock = Math.max(latest - span, 0);
+  const span = Math.floor(seconds / SECONDS_PER_BLOCK);
+  const startBlock = Math.max(latest - span, 0);
 
-  let totalIn = 0n;
-  let totalOut = 0n;
+  let requestCount = 0;
+  let sumPctTimes100 = 0n;
+  let pctCount = 0n;
 
-  await Promise.all(
-    wallets.map(async (wallet) => {
-      try {
-        const { inflow, outflow } = await getWalletFlows(
-          wallet,
-          fromBlock,
-          latest
-        );
-        totalIn += inflow;
-        totalOut += outflow;
-      } catch (err) {
-        console.warn(`Failed to fetch flows for wallet ${wallet}:`, err);
+  const walletSummaries: WalletBalanceSummary[] = [];
+
+  for (const wallet of wallets) {
+    try {
+      const [startBal, endBal] = await Promise.all([
+        getBalanceAt(wallet, startBlock),
+        getBalanceAt(wallet, latest),
+      ]);
+
+      requestCount += 2;
+      if (requestCount % 25 === 0) {
+        console.log("25 RPC requests made. Sleeping for 1 second.");
+        await sleep(1000);
       }
-    })
-  );
 
-  const total = totalIn + totalOut;
-  if (total === 0n) {
-    return { netInflowPercent: 0, netOutflowPercent: 0 };
+      const delta = endBal - startBal;
+
+      let percentChange: number | null = null;
+      if (startBal !== 0n && delta !== 0n) {
+        const pctTimes100 = (delta * 10000n) / startBal; // hundredth-percent
+        sumPctTimes100 += pctTimes100;
+        pctCount += 1n;
+        percentChange = Number(pctTimes100) / 100;
+      }
+
+      walletSummaries.push({
+        address: wallet,
+        startMon: formatMon(startBal),
+        endMon: formatMon(endBal),
+        deltaMon: formatMon(delta),
+        percentChange,
+      });
+    } catch (err) {
+      console.warn(`Failed to fetch balances for wallet ${wallet}:`, err);
+    }
   }
 
-  const inflowPct = Number((totalIn * 10000n) / total) / 100;
-  const outflowPct = Number((totalOut * 10000n) / total) / 100;
+  let averagePercentChange: number | null = null;
+  if (pctCount > 0n) {
+    averagePercentChange = Number(sumPctTimes100 / pctCount) / 100;
+  }
 
-  return { netInflowPercent: inflowPct, netOutflowPercent: outflowPct };
+  return { wallets: walletSummaries, averagePercentChange };
 }
 
 const app = express();
@@ -212,7 +200,7 @@ app.get("/api/monad/smart-distribution", async (req, res) => {
         smartMoney,
         smartTraders,
       },
-      source: "monad_rpc",
+      source: "monad_rpc_balances",
     });
   } catch (err) {
     console.error("Error computing smart distribution:", err);

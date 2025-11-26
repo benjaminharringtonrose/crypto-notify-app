@@ -1,6 +1,7 @@
 export type CoinSymbol = "BTC" | "ETH" | "SUI" | "ADA" | "MONAD";
 
 export type TimeRangeKey =
+  | "1h"
   | "24h"
   | "2d"
   | "3d"
@@ -43,6 +44,7 @@ const COINGECKO_IDS: Record<CoinSymbol, string> = {
 
 export const TIME_RANGES: { key: TimeRangeKey; label: string; days: number }[] =
   [
+    { key: "1h", label: "1 hr", days: 1 / 24 }, // 1 hour
     { key: "24h", label: "24 hrs", days: 1 },
     { key: "3d", label: "3 days", days: 3 },
     { key: "1w", label: "1 week", days: 7 },
@@ -93,6 +95,88 @@ class CoinGeckoService {
 
     const change = ((last - first) / first) * 100;
     return Number.isFinite(change) ? change : null;
+  }
+
+  /**
+   * Get detailed coin information including price, market cap, volume, ATH, etc.
+   * Uses the CoinGecko `/coins/{id}` endpoint.
+   */
+  async getCoinDetails(symbol: CoinSymbol): Promise<{
+    currentPrice: number | null;
+    marketCap: number | null;
+    circulatingSupply: number | null;
+    totalSupply: number | null;
+    volume24h: number | null;
+    marketCapRank: number | null;
+    ath: number | null;
+    athDate: string | null;
+    priceChange24h: number | null;
+    priceChange7d: number | null;
+    priceChange30d: number | null;
+  } | null> {
+    const id = COINGECKO_IDS[symbol];
+
+    const response = await fetch(
+      `https://api.coingecko.com/api/v3/coins/${id}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch coin details (${response.status})`);
+    }
+
+    const json = (await response.json()) as {
+      market_data?: {
+        current_price?: { usd?: number };
+        market_cap?: { usd?: number };
+        circulating_supply?: number;
+        total_supply?: number;
+        total_volume?: { usd?: number };
+        market_cap_rank?: number;
+        ath?: { usd?: number };
+        ath_date?: { usd?: string };
+        price_change_percentage_24h?: number;
+        price_change_percentage_7d?: number;
+        price_change_percentage_30d?: number;
+      };
+    };
+
+    const marketData = json.market_data;
+    if (!marketData) return null;
+
+    return {
+      currentPrice: marketData.current_price?.usd ?? null,
+      marketCap: marketData.market_cap?.usd ?? null,
+      circulatingSupply: marketData.circulating_supply ?? null,
+      totalSupply: marketData.total_supply ?? null,
+      volume24h: marketData.total_volume?.usd ?? null,
+      marketCapRank: marketData.market_cap_rank ?? null,
+      ath: marketData.ath?.usd ?? null,
+      athDate: marketData.ath_date?.usd ?? null,
+      priceChange24h: marketData.price_change_percentage_24h ?? null,
+      priceChange7d: marketData.price_change_percentage_7d ?? null,
+      priceChange30d: marketData.price_change_percentage_30d ?? null,
+    };
+  }
+
+  /**
+   * Get total global cryptocurrency market cap for dominance calculations.
+   */
+  async getGlobalMarketCap(): Promise<number | null> {
+    const response = await fetch(`https://api.coingecko.com/api/v3/global`);
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch global market data (${response.status})`
+      );
+    }
+
+    const json = (await response.json()) as {
+      data?: {
+        total_market_cap?: { usd?: number };
+      };
+    };
+
+    return json.data?.total_market_cap?.usd ?? null;
   }
 }
 

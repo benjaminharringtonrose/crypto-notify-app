@@ -3,6 +3,7 @@ import Constants from "expo-constants";
 import { CoinSymbol, TimeRangeKey } from "@/services/CoinGeckoService";
 
 type CoinMarketCapQuote = {
+  percent_change_1h?: number;
   percent_change_24h?: number;
   percent_change_7d?: number;
   percent_change_30d?: number;
@@ -20,6 +21,7 @@ const COINMARKETCAP_SYMBOLS: Record<CoinSymbol, string> = {
 };
 
 const RANGE_TO_FIELD: Record<TimeRangeKey, keyof CoinMarketCapQuote> = {
+  "1h": "percent_change_1h",
   "24h": "percent_change_24h",
   "2d": "percent_change_7d",
   "3d": "percent_change_7d",
@@ -89,6 +91,94 @@ class CoinMarketCapService {
 
     const value = quote[field];
     return typeof value === "number" ? value : null;
+  }
+
+  /**
+   * Get detailed coin information including price, market cap, volume, ATH, etc.
+   * Uses the CoinMarketCap `/v2/cryptocurrency/quotes/latest` endpoint.
+   */
+  async getCoinDetails(symbol: CoinSymbol): Promise<{
+    currentPrice: number | null;
+    marketCap: number | null;
+    circulatingSupply: number | null;
+    totalSupply: number | null;
+    volume24h: number | null;
+    marketCapRank: number | null;
+    ath: number | null;
+    athDate: string | null;
+    priceChange24h: number | null;
+    priceChange7d: number | null;
+    priceChange30d: number | null;
+  } | null> {
+    if (!this.apiKey) {
+      throw new Error(
+        "Missing COIN_MARKET_CAP_API_KEY. Please add it to your expo config."
+      );
+    }
+
+    const cmcSymbol = COINMARKETCAP_SYMBOLS[symbol];
+
+    const url = `https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest?symbol=${encodeURIComponent(
+      cmcSymbol
+    )}&convert=USD`;
+
+    const response = await fetch(url, {
+      headers: {
+        "X-CMC_PRO_API_KEY": this.apiKey,
+        accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch CoinMarketCap coin details (${response.status})`
+      );
+    }
+
+    const json = (await response.json()) as {
+      data?: {
+        [symbol: string]: {
+          id?: number;
+          name?: string;
+          symbol?: string;
+          cmc_rank?: number;
+          circulating_supply?: number;
+          total_supply?: number;
+          quote?: {
+            USD?: {
+              price?: number;
+              market_cap?: number;
+              volume_24h?: number;
+              percent_change_24h?: number;
+              percent_change_7d?: number;
+              percent_change_30d?: number;
+            };
+          };
+        }[];
+      };
+    };
+
+    const entry = json.data?.[cmcSymbol]?.[0];
+    const quote = entry?.quote?.USD;
+    if (!quote) return null;
+
+    // CoinMarketCap doesn't provide ATH in the quotes endpoint
+    // We'd need a separate call to get historical data for ATH
+    // For now, we'll return null for ATH and ATH date
+
+    return {
+      currentPrice: quote.price ?? null,
+      marketCap: quote.market_cap ?? null,
+      circulatingSupply: entry.circulating_supply ?? null,
+      totalSupply: entry.total_supply ?? null,
+      volume24h: quote.volume_24h ?? null,
+      marketCapRank: entry.cmc_rank ?? null,
+      ath: null, // Not available in this endpoint
+      athDate: null, // Not available in this endpoint
+      priceChange24h: quote.percent_change_24h ?? null,
+      priceChange7d: quote.percent_change_7d ?? null,
+      priceChange30d: quote.percent_change_30d ?? null,
+    };
   }
 }
 

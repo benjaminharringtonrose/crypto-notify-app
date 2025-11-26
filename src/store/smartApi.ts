@@ -3,17 +3,25 @@ import Constants from "expo-constants";
 
 import { TimeRangeKey } from "@/services/CoinGeckoService";
 
-type CohortDistribution = {
-  netInflowPercent: number;
-  netOutflowPercent: number;
+export type WalletBalanceSummary = {
+  address: string;
+  startMon: string;
+  endMon: string;
+  deltaMon: string;
+  percentChange: number | null;
+};
+
+export type CohortBalances = {
+  wallets: WalletBalanceSummary[];
+  averagePercentChange: number | null;
 };
 
 export type SmartDistributionResponse = {
   coin: string;
   timeRange: TimeRangeKey;
   cohorts: {
-    smartMoney: CohortDistribution;
-    smartTraders: CohortDistribution;
+    smartMoney: CohortBalances;
+    smartTraders: CohortBalances;
   };
   source: string;
 };
@@ -46,7 +54,8 @@ export const smartApi = createApi({
               },
             ]
           : [],
-      keepUnusedDataFor: 120,
+      // Keep data cached for 5 hours to avoid refetching too often.
+      // keepUnusedDataFor: 5 * 60 * 60,
     }),
   }),
 });

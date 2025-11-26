@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -10,47 +10,34 @@ import {
 
 import { colors } from "@/theme/colors";
 import {
-  coinGeckoService,
   CoinSymbol,
-  CoinData,
+  TIME_RANGES,
+  TimeRangeKey,
 } from "@/services/CoinGeckoService";
+import { useGetPercentChangeQuery } from "@/store/coinGeckoApi";
 
 export function Home() {
   const [selected, setSelected] = useState<CoinSymbol>("BTC");
-  const [coins, setCoins] = useState<Partial<Record<CoinSymbol, CoinData>>>({});
-  const [loading, setLoading] = useState(true);
+  const [timeRange, setTimeRange] = useState<TimeRangeKey>("24h");
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
+  const {
+    data: percentChange,
+    isFetching,
+    isError,
+  } = useGetPercentChangeQuery(
+    { symbol: selected, range: timeRange },
+    {
+      // Reduce unnecessary re-fetches when arguments haven't changed.
+      refetchOnMountOrArgChange: true,
+    }
+  );
 
-    const load = async () => {
-      try {
-        setLoading(true);
-        const data = await coinGeckoService.get24hChanges();
-        if (!mounted) return;
-        setCoins(data);
-        setError(null);
-      } catch (err) {
-        console.error(err);
-        if (!mounted) return;
-        setError(
-          err instanceof Error ? err.message : "Failed to load market data."
-        );
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
+  if (isError && !error) {
+    setError("Failed to load market data.");
+  }
 
-    load();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const activeCoin = coins[selected];
-  const change = activeCoin?.usdPrice24hrPercentChange ?? null;
+  const change = percentChange ?? null;
   const isPositive = typeof change === "number" && change > 0;
   const isNegative = typeof change === "number" && change < 0;
 
@@ -78,25 +65,55 @@ export function Home() {
 
         <View style={styles.selectorContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {coinGeckoService.coins.map((coin) => {
-              const isSelected = coin.symbol === selected;
+            {(["BTC", "ETH", "SUI", "ADA", "MONAD"] as CoinSymbol[]).map(
+              (symbol) => {
+                const isSelected = symbol === selected;
+                return (
+                  <TouchableOpacity
+                    key={symbol}
+                    style={[
+                      styles.selectorPill,
+                      isSelected && styles.selectorPillActive,
+                    ]}
+                    activeOpacity={0.9}
+                    onPress={() => setSelected(symbol)}
+                  >
+                    <Text
+                      style={[
+                        styles.selectorLabel,
+                        isSelected && styles.selectorLabelActive,
+                      ]}
+                    >
+                      {symbol}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }
+            )}
+          </ScrollView>
+        </View>
+
+        <View style={styles.timeRangeContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {TIME_RANGES.map((range) => {
+              const isSelected = range.key === timeRange;
               return (
                 <TouchableOpacity
-                  key={coin.symbol}
+                  key={range.key}
                   style={[
-                    styles.selectorPill,
-                    isSelected && styles.selectorPillActive,
+                    styles.rangePill,
+                    isSelected && styles.rangePillActive,
                   ]}
                   activeOpacity={0.9}
-                  onPress={() => setSelected(coin.symbol)}
+                  onPress={() => setTimeRange(range.key)}
                 >
                   <Text
                     style={[
-                      styles.selectorLabel,
-                      isSelected && styles.selectorLabelActive,
+                      styles.rangeLabel,
+                      isSelected && styles.rangeLabelActive,
                     ]}
                   >
-                    {coin.symbol}
+                    {range.label}
                   </Text>
                 </TouchableOpacity>
               );
@@ -105,9 +122,9 @@ export function Home() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>24h Change</Text>
+          <Text style={styles.cardLabel}>Price Change</Text>
 
-          {loading ? (
+          {isFetching ? (
             <View style={styles.loadingRow}>
               <ActivityIndicator color={colors.accent} />
               <Text style={styles.loadingText}>Fetching market data…</Text>
@@ -119,9 +136,7 @@ export function Home() {
               <Text style={[styles.changeValue, { color: changeColor }]}>
                 {formattedChange}
               </Text>
-              <Text style={styles.coinName}>
-                {activeCoin?.name ?? selected}
-              </Text>
+              <Text style={styles.coinName}>{selected}</Text>
             </>
           )}
         </View>
@@ -160,6 +175,12 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 24,
   },
+  timeRangeContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 16,
+  },
   selectorPill: {
     paddingVertical: 8,
     paddingHorizontal: 14,
@@ -184,6 +205,27 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
   selectorLabelActive: {
+    color: colors.text.white,
+  },
+  rangePill: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: colors.background.elevated,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    marginRight: 8,
+  },
+  rangePillActive: {
+    backgroundColor: colors.background.secondary,
+    borderColor: colors.accent,
+  },
+  rangeLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.text.secondary,
+  },
+  rangeLabelActive: {
     color: colors.text.white,
   },
   card: {

@@ -1,15 +1,16 @@
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createStaticNavigation, StaticParamList } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Platform } from 'react-native';
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import {
+  createStaticNavigation,
+  StaticParamList,
+} from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { Platform } from "react-native";
 
-import { Explore } from './screens/Explore';
-import { Home } from './screens/Home';
-import { NotFound } from './screens/NotFound';
+import { Home } from "./screens/Home";
 
-import { HapticTab } from '@/components/HapticTab';
-import { IconSymbol } from '@/components/ui/IconSymbol';
-import TabBarBackground from '@/components/ui/TabBarBackground';
+import { HapticTab } from "@/components/HapticTab";
+import { IconSymbol } from "@/components/IconSymbol";
+import TabBarBackground from "@/components/TabBarBackground";
 
 const HomeTabs = createBottomTabNavigator({
   screens: {
@@ -17,14 +18,9 @@ const HomeTabs = createBottomTabNavigator({
       screen: Home,
       options: {
         headerShown: false,
-        tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-      },
-    },
-    Explore: {
-      screen: Explore,
-      options: {
-        headerShown: false,
-        tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+        tabBarIcon: ({ color }) => (
+          <IconSymbol size={28} name="house.fill" color={color} />
+        ),
       },
     },
   },
@@ -32,10 +28,11 @@ const HomeTabs = createBottomTabNavigator({
     headerShown: false,
     tabBarButton: HapticTab,
     tabBarBackground: TabBarBackground,
+    // @ts-ignore
     tabBarStyle: Platform.select({
       ios: {
         // Use a transparent background on iOS to show the blur effect
-        possition: 'absolute',
+        position: "absolute",
       },
       default: {},
     }),
@@ -48,15 +45,6 @@ const RootStack = createNativeStackNavigator({
       screen: HomeTabs,
       options: {
         headerShown: false,
-      },
-    },
-    NotFound: {
-      screen: NotFound,
-      options: {
-        title: '404',
-      },
-      linking: {
-        path: '*',
       },
     },
   },

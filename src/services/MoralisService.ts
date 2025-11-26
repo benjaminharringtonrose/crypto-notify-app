@@ -36,10 +36,6 @@ const MORALIS_TOKENS: Partial<
     address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
     chain: "0x1",
   },
-  MONAD: {
-    address: "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
-    chain: "0x1",
-  },
   // TODO: Fill in SUI / ADA / MONAD ERC‑20 equivalents if desired.
 };
 
@@ -47,6 +43,15 @@ type MoralisPriceResponse = {
   // We only care about these fields from the Moralis response
   usdPrice?: number;
   usdPrice24hrPercentChange?: number;
+};
+
+type MoralisWalletHistoryResponse = {
+  // We keep this intentionally loose – callers can shape it as needed.
+  // See Moralis docs for the full schema.
+  result?: unknown[];
+  cursor?: string | null;
+  page?: number;
+  page_size?: number;
 };
 
 class MoralisService {
@@ -111,6 +116,59 @@ class MoralisService {
     );
 
     return data as Record<CoinSymbol, CoinData>;
+  }
+
+  /**
+   * Fetch multichain wallet activity for a given address using:
+   *   GET /wallets/{address}/history
+   *
+   * Note: This only works for chains supported by Moralis (EVM chains).
+   * Monad is not currently supported, so this is best used for EVM-based
+   * activity of "smart" wallets.
+   */
+  async getWalletHistory(params: {
+    address: string;
+    chains?: string[]; // e.g. ["eth", "polygon"]
+    cursor?: string;
+    limit?: number;
+  }): Promise<MoralisWalletHistoryResponse> {
+    const apiKey = this.apiKey;
+
+    if (!apiKey) {
+      throw new Error(
+        "Missing MORALIS_API_KEY. Please add it under expo.extra.MORALIS_API_KEY."
+      );
+    }
+
+    const { address, chains, cursor, limit = 100 } = params;
+
+    const searchParams = new URLSearchParams();
+    searchParams.set("limit", String(limit));
+    if (chains && chains.length > 0) {
+      searchParams.set("chains", chains.join(","));
+    }
+    if (cursor) {
+      searchParams.set("cursor", cursor);
+    }
+
+    const url = `https://deep-index.moralis.io/api/v2.2/wallets/${address}/history?${searchParams.toString()}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "X-API-Key": apiKey,
+        accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch Moralis wallet history (${response.status})`
+      );
+    }
+
+    const json = (await response.json()) as MoralisWalletHistoryResponse;
+    return json;
   }
 }
 

@@ -44,10 +44,8 @@ const COINGECKO_IDS: Record<CoinSymbol, string> = {
 export const TIME_RANGES: { key: TimeRangeKey; label: string; days: number }[] =
   [
     { key: "24h", label: "24 hrs", days: 1 },
-    { key: "2d", label: "2 days", days: 2 },
     { key: "3d", label: "3 days", days: 3 },
     { key: "1w", label: "1 week", days: 7 },
-    { key: "2w", label: "2 weeks", days: 14 },
     { key: "1m", label: "1 month", days: 30 },
     { key: "3m", label: "3 months", days: 90 },
     { key: "6m", label: "6 months", days: 180 },

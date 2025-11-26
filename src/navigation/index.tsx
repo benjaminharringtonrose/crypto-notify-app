@@ -7,6 +7,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Platform } from "react-native";
 
 import { Home } from "./screens/Home";
+import { SmartFlows } from "./screens/SmartFlows";
 
 import { HapticTab } from "@/components/HapticTab";
 import { IconSymbol } from "@/components/IconSymbol";
@@ -21,6 +22,16 @@ const HomeTabs = createBottomTabNavigator({
         tabBarIcon: ({ color }) => (
           <IconSymbol size={28} name="house.fill" color={color} />
         ),
+      },
+    },
+    SmartFlows: {
+      screen: SmartFlows,
+      options: {
+        headerShown: false,
+        tabBarIcon: ({ color }) => (
+          <IconSymbol size={28} name="chart.xyaxis.line" color={color} />
+        ),
+        tabBarLabel: "Smart Flows",
       },
     },
   },

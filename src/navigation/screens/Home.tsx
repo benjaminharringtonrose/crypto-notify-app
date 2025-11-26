@@ -15,8 +15,11 @@ import {
   TimeRangeKey,
 } from "@/services/CoinGeckoService";
 import { useGetPercentChangeQuery } from "@/store/cryptoApi";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export function Home() {
+  const { top } = useSafeAreaInsets();
+
   const [selected, setSelected] = useState<CoinSymbol>("BTC");
   const [timeRange, setTimeRange] = useState<TimeRangeKey>("24h");
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +48,7 @@ export function Home() {
     typeof change === "number" ? `${change.toFixed(2)}%` : "--";
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { paddingTop: top }]}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}

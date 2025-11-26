@@ -9,7 +9,10 @@
     "web": "expo start --web",
     "compile": "tsc --noEmit",
     "prebuild": "expo prebuild --clean",
-    "ios:device": "npx expo run:ios --device benji"
+    "ios:device": "npx expo run:ios --device benji",
+    "backend:dev": "cd backend && npm run dev",
+    "backend:build": "cd backend && npm run build",
+    "backend:start": "cd backend && npm start"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.0",
@@ -53,5 +56,8 @@
     "eslint-config-expo": "~10.0.0",
     "typescript": "~5.9.2"
   },
+  "workspaces": [
+    "backend"
+  ],
   "private": true
 }

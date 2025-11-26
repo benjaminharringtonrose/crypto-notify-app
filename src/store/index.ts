@@ -12,6 +12,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { cryptoApi } from "@/store/cryptoApi";
+import { smartApi } from "@/store/smartApi";
 
 const persistConfig = {
   key: "root",
@@ -21,6 +22,7 @@ const persistConfig = {
 
 const rootReducer = combineReducers({
   [cryptoApi.reducerPath]: cryptoApi.reducer,
+  [smartApi.reducerPath]: smartApi.reducer,
 });
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
@@ -32,7 +34,7 @@ export const store = configureStore({
       serializableCheck: {
         ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
       },
-    }).concat(cryptoApi.middleware),
+    }).concat(cryptoApi.middleware, smartApi.middleware),
 });
 
 export const persistor = persistStore(store);
